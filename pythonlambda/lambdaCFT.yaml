@@ -11,6 +11,9 @@
           - MyLambdaRole
           - Arn
         Runtime: Python3.8
+         Code:
+          S3Bucket: "S3Bucketname"
+          S3Key:  "lambdafunction.zip"
 
     MyEventName:
       Type: AWS::Events::Rule

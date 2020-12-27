@@ -49,12 +49,14 @@ Relationship principles for the component.
                     Policy:
                     ElastiCacheServiceRolePolicy
 
-#PythonLambda
+# PythonLambda
 Description: An inventory of all EC2 instances running in a particular AWS account needs to be taken
 twice per day using serverless function (Lambda) in Python 3.
 
-1. .py file inside the folder pythonlambda contains the lambda function that is triggered on an event in cloudwatch which is scheduled twice per day.
+1. lambda_function.py file inside the folder pythonlambda contains the lambda function that is triggered on an event in cloudwatch which is scheduled twice per day. And packages related to are inside common folder.
+
 2. lambdaCFT.yaml inside the folder pythonlambda contains Infrastructure-as-pseudo-Code for the solution.
+
 3. IAM Permission required for the lambda function are the following.
 
                 Cloudwatch logs:
@@ -80,7 +82,7 @@ twice per day using serverless function (Lambda) in Python 3.
                 Permissions:
                 Publish
 
-4. Trigger for the lambda fucntion and its configuration:
+4. Trigger for the lambda function and its configuration:
     CLoudwatch events is the trigger.
     It is done from the configuration setting of lambda function.
     From the designer we need to click on Add trigger
