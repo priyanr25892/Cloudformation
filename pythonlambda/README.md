@@ -1,4 +1,4 @@
-# Sample Email Content
+# Sample Email Content for the SNS topic 
 Below are the exceptional instances
 i-0b755a8aba28863e7
 i-0ea8cac69b75ac64c
