@@ -96,3 +96,6 @@ twice per day using serverless function (Lambda) in Python 3.
     Go to Cloudwatch Events-->Rules. Edit the created rule and provide the target as lambda function .
     Enter the name of the function and configure input as Constant with key test and value as true.
 
+5. Architecure Layout for the Lambda function.
+ ![alt text](https://github.com/priyanr25892/Cloudformation/blob/main/pythonlambda/Architecture.png?raw=true)
+
