@@ -1,0 +1,987 @@
+#Web Stack/Infrastructure as Code
+
+  Description: 
+    multi tier web Stack  
+
+  Parameters:
+    VPCName:
+      Description: The name of the VPC being created.
+      Type: String
+      Default: "VPC with public and private subnets"
+
+    KeyName:
+      Description: Name of an existing EC2 KeyPair to enable SSH access to the instances
+      Type: AWS::EC2::KeyPair::KeyName
+      ConstraintDescription: must be the name of an existing EC2 KeyPair.
+
+    RedisPort:
+      Description: >-
+        The port number on which each member of the replication group accepts
+        connections.
+      Type: Number
+      Default: '6379'
+      MinValue: '1'
+      MaxValue: '65535'
+
+    CacheNodeType:
+      Description: Cache node instance class, e.g. cache.t2.micro(free tier). See https://docs.aws.amazon.com/AmazonElastiCache/latest/UserGuide/CacheNodes.SelectSize.html
+      Type: String
+      Default: cache.t2.micro
+      ConstraintDescription: Node instance class not supported
+      AllowedValues:
+        - cache.t2.micro
+        - cache.t2.small
+        - cache.t2.medium
+        - cache.m4.large
+        - cache.m4.xlarge
+        - cache.m4.2xlarge
+        - cache.m4.4xlarge
+        - cache.m4.10xlarge
+        - cache.r4.large
+        - cache.r4.xlarge
+        - cache.r4.2xlarge
+        - cache.r4.4xlarge
+        - cache.r4.8xlarge
+        - cache.r4.16xlarge
+
+    ClusterName:
+      Description: Custom name of the cluster. Auto generated if you don't supply your own.
+      Type: String
+      AllowedPattern: "^[a-zA-Z][-a-zA-Z0-9]*$"
+
+    MultiAZSupport:
+      Description: >-
+        Indicates whether Multi-AZ is enabled. When Multi-AZ is enabled, a
+        read-only replica is automatically promoted to a read-write primary
+        cluster if the existing primary cluster fails. If you specify true, you
+        must specify a value greater than 1 for the NumCacheClusters property.
+      Type: String
+      Default: 'true'
+      AllowedValues:
+        - 'true'
+        - 'false'
+
+    NumCacheClusters:
+      Description: >-
+         The number of cache clusters for this replication group. If MultiAZ
+         support is enabled, you must specify a value greater than 1.
+      Default: '2'
+      Type: Number
+      MinValue: '1'
+      MaxValue: '6'
+      
+
+    ReplicationGroupDescription:
+      Description: The description of the replication group.
+      Type: String
+      Default: Example replication group
+  
+    SnapshotRetentionLimit:
+      Description: >-
+        The number of days that ElastiCache retains automatic snapshots before
+        deleting them.
+      Type: Number
+      Default: '7'
+
+    SnapshotWindow:
+      Description: >-
+        The time range (in UTC) when ElastiCache takes a daily snapshot of your
+        node group.
+      Type: String
+      Default: '05:00-09:00'
+      AllowedPattern: '\d{2}:\d{2}-\d{2}:\d{2}'
+      ConstraintDescription: 'must be a valid timestamp range, for example 05:00-09:00'
+
+    PreferredMaintenanceWindow:
+      Description: >-
+        The weekly time range during which system maintenance can occur. Use the
+        following format to specify a time range: ddd:hh24:mi-ddd:hh24:mi (24H
+        Clock UTC).
+      Type: String
+      Default: 'sun:22:00-sun:23:30'
+      AllowedPattern: >-
+        (mon|tue|wed|thu|fri|sat|sun):\d{2}:\d{2}-(mon|tue|wed|thu|fri|sat|sun):\d{2}:\d{2}
+      ConstraintDescription: >-
+        must be a valid timestamp range with day of week, for example
+        sun:22:00-sun:23:30
+
+    DBName:
+      Default: MyDatabase
+      Description: The database name
+      Type: String
+      MinLength: '1'
+      MaxLength: '64'
+      AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
+      ConstraintDescription: must begin with a letter and contain only alphanumeric
+        characters.
+
+    DBUser:
+      NoEcho: 'true'
+      Description: The database admin account username
+      Type: String
+      MinLength: '1'
+      MaxLength: '16'
+      AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
+      ConstraintDescription: must begin with a letter and contain only alphanumeric
+        characters.
+
+    DBPassword:
+      NoEcho: 'true'
+      Description: The database admin account password
+      Type: String
+      MinLength: '1'
+      MaxLength: '41'
+      AllowedPattern: '[a-zA-Z0-9]+'
+      ConstraintDescription: must contain only alphanumeric characters.
+
+    DBAllocatedStorage:
+      Default: '5'
+      Description: The size of the database (Gb)
+      Type: Number
+      MinValue: '5'
+      MaxValue: '1024'
+      ConstraintDescription: must be between 5 and 1024Gb.
+    
+    DBInstanceClass:
+      Description: The database instance type
+      Type: String
+      Default: db.t2.small
+      AllowedValues: [db.t1.micro, db.m1.small, db.m1.medium, db.m1.large, db.m1.xlarge,
+        db.m2.xlarge, db.m2.2xlarge, db.m2.4xlarge, db.m3.medium, db.m3.large, db.m3.xlarge,
+        db.m3.2xlarge, db.m4.large, db.m4.xlarge, db.m4.2xlarge, db.m4.4xlarge, db.m4.10xlarge,
+        db.r3.large, db.r3.xlarge, db.r3.2xlarge, db.r3.4xlarge, db.r3.8xlarge, db.m2.xlarge,
+        db.m2.2xlarge, db.m2.4xlarge, db.cr1.8xlarge, db.t2.micro, db.t2.small, db.t2.medium,
+        db.t2.large]
+      ConstraintDescription: must select a valid database instance type.
+
+  Mappings:
+    SubnetConfig:
+      VPC:
+        CIDR: "10.0.0.0/22"
+      Public0:
+        CIDR: "10.0.0.0/22"
+      Public1:
+        CIDR: "10.0.1.0/22"
+      Private0:
+        CIDR: "10.0.2.0/22"
+      Private1:
+        CIDR: "10.0.3.0/22"
+
+    # This mapping accounts for the scenario when certain AZs
+    # are not available to use (this differs on a per account
+    # per customer basis). E.g., if the 'b' AZ is not available
+    # in a specific region in one's account then updating the
+    # list contained in the mapping below here will allow a
+    # different AZ to be chosen.
+    AZRegions:
+      us-east-2:
+        AZs: ["a", "b"]
+      ap-northeast-1:
+        AZs: ["a", "b"]
+      ap-northeast-2:
+        AZs: ["a", "b"]
+      ap-south-1:
+        AZs: ["a", "b"]
+      ap-southeast-1:
+        AZs: ["a", "b"]
+      ap-southeast-2:
+        AZs: ["a", "b"]
+      ca-central-1:
+        AZs: ["a", "b"]
+      eu-central-1:
+        AZs: ["a", "b"]
+      eu-west-1:
+        AZs: ["a", "b"]
+      eu-west-2:
+        AZs: ["a", "b"]
+      sa-east-1:
+        AZs: ["a", "b"]
+      us-east-1:
+        AZs: ["a", "b"]
+      us-west-1:
+        AZs: ["a", "b"]
+      us-west-2:
+        AZs: ["a", "b"]
+
+    AWSInstanceType2Arch:
+      t1.micro:
+        Arch: PV64
+      t2.nano:
+        Arch: HVM64
+      t2.micro:
+        Arch: HVM64
+      t2.small:
+        Arch: HVM64
+      t2.medium:
+        Arch: HVM64
+      t2.large:
+        Arch: HVM64
+      m1.small:
+        Arch: PV64
+      m1.medium:
+        Arch: PV64
+      m1.large:
+        Arch: PV64
+      m1.xlarge:
+        Arch: PV64
+      m2.xlarge:
+        Arch: PV64
+      m2.2xlarge:
+        Arch: PV64
+      m2.4xlarge:
+        Arch: PV64
+      m3.medium:
+        Arch: HVM64
+
+  Resources:
+
+    VPC:
+      Type: "AWS::EC2::VPC"
+      Properties:
+        EnableDnsSupport: "true"
+        EnableDnsHostnames: "true"
+        CidrBlock:
+          Fn::FindInMap:
+            - "SubnetConfig"
+            - "VPC"
+            - "CIDR"
+        Tags:
+          -
+            Key: "Application"
+            Value:
+              Ref: "AWS::StackName"
+          -
+            Key: "Network"
+            Value: "Public"
+          -
+            Key: "Name"
+            Value: !Ref 'VPCName'
+
+    PublicSubnet0:
+      Type: "AWS::EC2::Subnet"
+      Properties:
+        VpcId:
+          Ref: "VPC"
+        AvailabilityZone:
+          Fn::Sub:
+            - "${AWS::Region}${AZ}"
+            - AZ: !Select [ 0, !FindInMap [ "AZRegions", !Ref "AWS::Region", "AZs" ] ]
+        CidrBlock:
+          Fn::FindInMap:
+            - "SubnetConfig"
+            - "Public0"
+            - "CIDR"
+        MapPublicIpOnLaunch: "true"
+        Tags:
+          -
+            Key: "Application"
+            Value:
+              Ref: "AWS::StackName"
+          -
+            Key: "Network"
+            Value: "Public"
+          -
+            Key: "Name"
+            Value: !Join
+              - ''
+              - - !Ref "VPCName"
+                - '-public-'
+                - !Select [ 0, !FindInMap [ "AZRegions", !Ref "AWS::Region", "AZs" ] ]
+
+    PublicSubnet1:
+      Type: "AWS::EC2::Subnet"
+      Properties:
+        VpcId:
+          Ref: "VPC"
+        AvailabilityZone:
+          Fn::Sub:
+            - "${AWS::Region}${AZ}"
+            - AZ: !Select [ 1, !FindInMap [ "AZRegions", !Ref "AWS::Region", "AZs" ] ]
+        CidrBlock:
+          Fn::FindInMap:
+            - "SubnetConfig"
+            - "Public1"
+            - "CIDR"
+        MapPublicIpOnLaunch: "true"
+        Tags:
+          -
+            Key: "Application"
+            Value:
+              Ref: "AWS::StackName"
+          -
+            Key: "Network"
+            Value: "Public"
+          -
+            Key: "Name"
+            Value: !Join
+              - ''
+              - - !Ref "VPCName"
+                - '-public-'
+                - !Select [ 1, !FindInMap [ "AZRegions", !Ref "AWS::Region", "AZs" ] ]
+
+    PrivateSubnet0:
+      Type: "AWS::EC2::Subnet"
+      Properties:
+        VpcId:
+          Ref: "VPC"
+        AvailabilityZone:
+          Fn::Sub:
+            - "${AWS::Region}${AZ}"
+            - AZ: !Select [ 0, !FindInMap [ "AZRegions", !Ref "AWS::Region", "AZs" ] ]
+        CidrBlock:
+          Fn::FindInMap:
+            - "SubnetConfig"
+            - "Private0"
+            - "CIDR"
+        Tags:
+          -
+            Key: "Application"
+            Value:
+              Ref: "AWS::StackName"
+          -
+            Key: "Network"
+            Value: "Private"
+          -
+            Key: "Name"
+            Value: !Join
+              - ''
+              - - !Ref "VPCName"
+                - '-private-'
+                - !Select [ 0, !FindInMap [ "AZRegions", !Ref "AWS::Region", "AZs" ] ]
+
+    PrivateSubnet1:
+      Type: "AWS::EC2::Subnet"
+      Properties:
+        VpcId:
+          Ref: "VPC"
+        AvailabilityZone:
+          Fn::Sub:
+            - "${AWS::Region}${AZ}"
+            - AZ: !Select [ 1, !FindInMap [ "AZRegions", !Ref "AWS::Region", "AZs" ] ]
+        CidrBlock:
+          Fn::FindInMap:
+            - "SubnetConfig"
+            - "Private1"
+            - "CIDR"
+        Tags:
+          -
+            Key: "Application"
+            Value:
+              Ref: "AWS::StackName"
+          -
+            Key: "Network"
+            Value: "Private"
+          -
+            Key: "Name"
+            Value: !Join
+              - ''
+              - - !Ref "VPCName"
+                - '-private-'
+                - !Select [ 1, !FindInMap [ "AZRegions", !Ref "AWS::Region", "AZs" ] ]
+
+    InternetGateway:
+      Type: "AWS::EC2::InternetGateway"
+      Properties:
+        Tags:
+          -
+            Key: "Application"
+            Value:
+              Ref: "AWS::StackName"
+          -
+            Key: "Network"
+            Value: "Public"
+          -
+            Key: "Name"
+            Value: !Join
+              - ''
+              - - !Ref "VPCName"
+                - '-IGW'
+
+
+    GatewayToInternet:
+      Type: "AWS::EC2::VPCGatewayAttachment"
+      Properties:
+        VpcId:
+          Ref: "VPC"
+        InternetGatewayId:
+          Ref: "InternetGateway"
+
+    PublicRouteTable:
+      Type: "AWS::EC2::RouteTable"
+      Properties:
+        VpcId:
+          Ref: "VPC"
+        Tags:
+          -
+            Key: "Application"
+            Value:
+              Ref: "AWS::StackName"
+          -
+            Key: "Network"
+            Value: "Public"
+          -
+            Key: "Name"
+            Value: !Join
+              - ''
+              - - !Ref "VPCName"
+                - '-public-route-table'
+
+
+    PublicRoute:
+      Type: "AWS::EC2::Route"
+      DependsOn: "GatewayToInternet"
+      Properties:
+        RouteTableId:
+          Ref: "PublicRouteTable"
+        DestinationCidrBlock: "0.0.0.0/0"
+        GatewayId:
+          Ref: "InternetGateway"
+
+    PublicSubnetRouteTableAssociation0:
+      Type: "AWS::EC2::SubnetRouteTableAssociation"
+      Properties:
+        SubnetId:
+          Ref: "PublicSubnet0"
+        RouteTableId:
+          Ref: "PublicRouteTable"
+
+    PublicSubnetRouteTableAssociation1:
+      Type: "AWS::EC2::SubnetRouteTableAssociation"
+      Properties:
+        SubnetId:
+          Ref: "PublicSubnet1"
+        RouteTableId:
+          Ref: "PublicRouteTable"
+
+    PublicNetworkAcl:
+      Type: "AWS::EC2::NetworkAcl"
+      Properties:
+        VpcId:
+          Ref: "VPC"
+        Tags:
+          -
+            Key: "Application"
+            Value:
+              Ref: "AWS::StackName"
+          -
+            Key: "Network"
+            Value: "Public"
+          -
+            Key: "Name"
+            Value: !Join
+              - ''
+              - - !Ref "VPCName"
+                - '-public-nacl'
+
+
+
+    InboundHTTPPublicNetworkAclEntry:
+      Type: "AWS::EC2::NetworkAclEntry"
+      Properties:
+        NetworkAclId:
+          Ref: "PublicNetworkAcl"
+        RuleNumber: "100"
+        Protocol: "-1"
+        RuleAction: "allow"
+        Egress: "false"
+        CidrBlock: "0.0.0.0/0"
+        PortRange:
+          From: "0"
+          To: "65535"
+
+    OutboundPublicNetworkAclEntry:
+      Type: "AWS::EC2::NetworkAclEntry"
+      Properties:
+        NetworkAclId:
+          Ref: "PublicNetworkAcl"
+        RuleNumber: "100"
+        Protocol: "-1"
+        RuleAction: "allow"
+        Egress: "true"
+        CidrBlock: "0.0.0.0/0"
+        PortRange:
+          From: "0"
+          To: "65535"
+    
+    PublicSubnetNetworkAclAssociation0:
+      Type: "AWS::EC2::SubnetNetworkAclAssociation"
+      Properties:
+        SubnetId:
+          Ref: "PublicSubnet0"
+        NetworkAclId:
+          Ref: "PublicNetworkAcl"
+
+    PublicSubnetNetworkAclAssociation1:
+      Type: "AWS::EC2::SubnetNetworkAclAssociation"
+      Properties:
+        SubnetId:
+          Ref: "PublicSubnet1"
+        NetworkAclId:
+          Ref: "PublicNetworkAcl"
+
+    PrivateNetworkAcl:
+      Type: AWS::EC2::NetworkAcl
+      Properties:
+        VpcId:
+          Ref: VPC
+        Tags:
+        - Key: Application
+          Value:
+            Ref: AWS::StackId
+        - Key: Network
+          Value: Private
+        -
+              Key: "Name"
+              Value: !Join
+                - ''
+                - - !Ref "VPCName"
+                  - '-private-nacl'
+
+    InboundPrivateNetworkAclEntry:
+      Type: AWS::EC2::NetworkAclEntry
+      Properties:
+        NetworkAclId:
+          Ref: PrivateNetworkAcl
+        RuleNumber: '100'
+        Protocol: '6'
+        RuleAction: allow
+        Egress: 'false'
+        CidrBlock: 0.0.0.0/0
+        PortRange:
+          From: '0'
+          To: '65535'
+
+    OutBoundPrivateNetworkAclEntry:
+      Type: AWS::EC2::NetworkAclEntry
+      Properties:
+        NetworkAclId:
+          Ref: PrivateNetworkAcl
+        RuleNumber: '100'
+        Protocol: '6'
+        RuleAction: allow
+        Egress: 'true'
+        CidrBlock: 0.0.0.0/0
+        PortRange:
+          From: '0'
+          To: '65535'
+
+    
+
+    ElasticIP0:
+      Type: "AWS::EC2::EIP"
+      Properties:
+        Domain: "vpc"
+
+    ElasticIP1:
+      Type: "AWS::EC2::EIP"
+      Properties:
+        Domain: "vpc"
+
+    NATGateway0:
+      Type: "AWS::EC2::NatGateway"
+      Properties:
+        AllocationId:
+          Fn::GetAtt:
+            - "ElasticIP0"
+            - "AllocationId"
+        SubnetId:
+          Ref: "PublicSubnet0"
+
+    NATGateway1:
+      Type: "AWS::EC2::NatGateway"
+      Properties:
+        AllocationId:
+          Fn::GetAtt:
+            - "ElasticIP1"
+            - "AllocationId"
+        SubnetId:
+          Ref: "PublicSubnet1"
+
+    PrivateRouteTable0:
+      Type: "AWS::EC2::RouteTable"
+      Properties:
+        VpcId:
+          Ref: "VPC"
+        Tags:
+          -
+            Key: "Name"
+            Value: !Join
+              - ''
+              - - !Ref "VPCName"
+                - '-private-route-table-0'
+
+    PrivateRouteTable1:
+      Type: "AWS::EC2::RouteTable"
+      Properties:
+        VpcId:
+          Ref: "VPC"
+        Tags:
+          -
+            Key: "Name"
+            Value: !Join
+              - ''
+              - - !Ref "VPCName"
+                - '-private-route-table-1'
+
+    PrivateRouteToInternet0:
+      Type: "AWS::EC2::Route"
+      Properties:
+        RouteTableId:
+          Ref: "PrivateRouteTable0"
+        DestinationCidrBlock: "0.0.0.0/0"
+        NatGatewayId:
+          Ref: "NATGateway0"
+
+    PrivateRouteToInternet1:
+      Type: "AWS::EC2::Route"
+      Properties:
+        RouteTableId:
+          Ref: "PrivateRouteTable1"
+        DestinationCidrBlock: "0.0.0.0/0"
+        NatGatewayId:
+          Ref: "NATGateway1"
+
+    PrivateSubnetRouteTableAssociation0:
+      Type: "AWS::EC2::SubnetRouteTableAssociation"
+      Properties:
+        SubnetId:
+          Ref: "PrivateSubnet0"
+        RouteTableId:
+          Ref: "PrivateRouteTable0"
+
+    PrivateSubnetRouteTableAssociation1:
+      Type: "AWS::EC2::SubnetRouteTableAssociation"
+      Properties:
+        SubnetId:
+          Ref: "PrivateSubnet1"
+        RouteTableId:
+          Ref: "PrivateRouteTable1"
+
+    PrivateSubnetNetworkAclAssociation0:
+      Type: "AWS::EC2::SubnetNetworkAclAssociation"
+      Properties:
+        SubnetId:
+          Ref: "PrivateSubnet0"
+        NetworkAclId:
+          Ref: "PrivateNetworkAcl"
+
+     PrivateSubnetNetworkAclAssociation0:
+      Type: "AWS::EC2::SubnetNetworkAclAssociation"
+      Properties:
+        SubnetId:
+          Ref: "PrivateSubnet1"
+        NetworkAclId:
+          Ref: "PrivateNetworkAcl"
+
+    
+     # EC2 Security Group Allowing Port 22 and 80 from anywhere
+    EC2SecurityGroup:
+        Type: AWS::EC2::SecurityGroup
+        Properties:
+            GroupDescription: 'SSH and Port 80'
+            VpcId:
+              Ref: VPC
+            SecurityGroupIngress:
+                - IpProtocol: tcp
+                  FromPort: 22
+                  ToPort: 22
+                  CidrIp: 0.0.0.0/0
+                - IpProtocol: tcp
+                  FromPort: 80
+                  ToPort: 80
+                  SourceSecurityGroupId:
+                      Ref: ELBSecurityGroup
+
+    # ELB Security Group allowing Port 80 from anywhere
+    ELBSecurityGroup:
+        Type: AWS::EC2::SecurityGroup
+        Properties:
+            GroupDescription: 'SSH and Port 80'
+            VpcId:
+              Ref: VPC
+            SecurityGroupIngress:
+                - IpProtocol: tcp
+                  FromPort: 80
+                  ToPort: 80
+                  CidrIp: 0.0.0.0/0
+
+     # Redis Security Group allowing Port 6379 from anywhere              
+    RedisSecurityGroup:
+      Type: 'AWS::EC2::SecurityGroup'
+      Properties:
+        GroupDescription: Security Group for Example Replication Group
+        SecurityGroupIngress:
+          - CidrIp: 0.0.0.0/0
+            FromPort: !Ref RedisPort
+            ToPort: !Ref RedisPort
+            IpProtocol: tcp
+        VpcId: !Ref VPC
+
+    #RDS Instnance Security group allowing port 22 and 80    
+    InstanceSecurityGroup:
+      Type: AWS::EC2::SecurityGroup
+      Properties:
+        GroupDescription: Enable SSH access and HTTP access on the configured port
+        SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: '22'
+          ToPort: '22'
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: '80'
+          ToPort: '80'
+          CidrIp: 0.0.0.0/0
+
+    DBInstance:
+      Type: AWS::RDS::DBInstance
+      Properties:
+        DBName:
+          Ref: DBName
+        Engine: MySQL
+        MasterUsername:
+          Ref: DBUser
+        DBInstanceClass:
+          Ref: DBClass
+        DBSecurityGroups:
+        - Ref: DBSecurityGroup
+        AllocatedStorage:
+          Ref: DBAllocatedStorage
+        MasterUserPassword:
+          Ref: DBPassword
+    
+    DBSecurityGroup:
+      Type: AWS::RDS::DBSecurityGroup
+      Properties:
+        DBSecurityGroupIngress:
+          EC2SecurityGroupName:
+            Ref: InstanceSecurityGroup
+        GroupDescription: Frontend Access
+
+    DBSubnetGroup: 
+      Type: "AWS::RDS::DBSubnetGroup"
+      Properties: 
+        DBSubnetGroupDescription: description
+        SubnetIds: 
+          - Ref: PrivateSubnet0
+          - Ref: PrivateSubnet1
+        Tags: 
+          - 
+            Key: String
+            Value: String
+
+    RedisSubnetGroup:
+      Type: 'AWS::ElastiCache::SubnetGroup'
+      Properties:
+        Description: Subnet Group for Example Replication Group
+        SubnetIds:
+          - !Ref PrivateSubnet0
+          - !Ref PrivateSubnet1
+
+    ReplicationGroup:
+      Type: 'AWS::ElastiCache::ReplicationGroup'
+      Properties:
+        AutomaticFailoverEnabled: !Ref MultiAZSupport
+        CacheNodeType: !Ref CacheNodeType
+        CacheSubnetGroupName: !Ref RedisSubnetGroup
+        Engine: redis
+        NumCacheClusters: !Ref NumCacheClusters
+        Port: !Ref RedisPort
+        PreferredMaintenanceWindow: !Ref PreferredMaintenanceWindow
+        ReplicationGroupDescription: !Ref ReplicationGroupDescription
+        SecurityGroupIds:
+          - !GetAtt 
+            - SecurityGroup
+            - GroupId
+        SnapshotRetentionLimit: !Ref SnapshotRetentionLimit
+        SnapshotWindow: !Ref SnapshotWindow
+
+        
+    LoadBalancer:
+      Type: AWS::ElasticLoadBalancing::LoadBalancer
+      Condition: CreateMultipleInstances
+      Properties:
+         Properties:
+          Scheme: internet-facing # or internal
+          Subnets:
+          - Ref: PublicSubnet0
+          - Ref: PublicSubnet1
+          SecurityGroups:
+          - Ref: ELBSecurityGroup
+
+    #Loadbalancer with SSL termination enabled
+    SslPolicy:
+    - PolicyName: My-SSLNegotiation-Policy
+      PolicyType: SSLNegotiationPolicyType
+      Attributes:
+      - Name: Reference-Security-Policy
+        Value: ELBSecurityPolicy-TLS-1-2-2017-01
+
+    LoadBalancerListener:
+      Type: AWS::ElasticLoadBalancingV2::Listener
+      Properties:
+        DefaultActions:
+          - Type: forward
+            TargetGroupArn:
+              Ref: EC2TargetGroup
+        LoadBalancerArn:
+            Ref: LoadBalancer
+        Port: 80
+        Protocol: HTTP
+        Certificates:
+          - CertificateArn: !Join
+            - ":"
+            - - arn:aws:acm
+              - !Ref AWS::Region
+              - !Ref AWS::AccountId
+              - !Join ["/", ["certificate", !Ref CertificateId ]]
+          SslPolicy: !Ref SslPolicy
+
+    EC2TargetGroup:
+      Type: AWS::ElasticLoadBalancingV2::TargetGroup
+      Properties:
+        HealthCheckIntervalSeconds: 30
+        HealthCheckProtocol: HTTP
+        HealthCheckTimeoutSeconds: 15
+        HealthyThresholdCount: 5
+        HealthCheck:
+         Target: HTTP:80/
+        Name: EC2TargetGroup
+        Port: 80
+        Protocol: HTTP
+        TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: '20'
+        UnhealthyThresholdCount: 3
+        VpcId:
+          Ref: 'VPC'
+        Tags:
+        - Key: Name
+          Value: EC2TargetGroup
+        - Key: Port
+          Value: 80
+
+    WebServerAutoscaleGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AvailabilityZones: !GetAZs ''
+      LaunchConfigurationName: !Ref 'LaunchConfig'
+      MinSize: '2'
+      MaxSize: '2'
+      LoadBalancerNames: [!Ref 'LoadBalancer']
+    CreationPolicy:
+      ResourceSignal:
+        Timeout: PT15M
+    UpdatePolicy:
+     AutoScalingReplacingUpdate:
+        WillReplace: True
+    
+    LaunchConfig:
+      Type: AWS::AutoScaling::LaunchConfiguration
+      Metadata:
+        Comment: Install a simple application
+        AWS::CloudFormation::Init:
+          config:
+            packages:
+              yum:
+                httpd: []
+            files:
+              /var/www/html/index.html:
+                  content:
+                Fn::Join:
+                - ''
+                - - "<html>\n"
+                  - "  <head>\n"
+                  - "    <title>Welcome to a sample multi-tier app!</title>\n"
+                  - "  </head>\n"
+                  - "  <body>\n"
+                  - "    <h1>Welcome to a sample multi-tier app!</h1>\n"
+                  - "  </body>\n"
+                  - "</html>\n"
+              mode: '0600'
+              owner: apache
+              group: apache
+             
+            services:
+              sysvinit:
+                httpd:
+                  enabled: 'true'
+                  ensureRunning: 'true'
+                
+      Properties:
+          KeyName: !Ref 'KeyName'
+          ImageId: !FindInMap [AZRegions, !Ref 'AWS::Region', !FindInMap [AWSInstanceType2Arch,
+              !Ref 'InstanceType', Arch]]
+          SecurityGroups: [!Ref 'InstanceSecurityGroup']
+          InstanceType: !Ref 'InstanceType'
+          Subnets:
+          - Ref: PrivateSubnet0
+          - Ref: PrivateSubnet1
+          UserData: !Base64
+            Fn::Join:
+             Fn::Base64: !Sub |
+            #!/bin/bash
+            yum -y update
+            sleep 30 # prevent "Error: Rpmdb changed underneath us"
+            yum install python3 python-virtualenv python-pip -y
+            python3 -m venv /home/ec2-user/venv
+            source /home/ec2-user/venv/bin/activate
+            pip install boto3
+            pip install ec2_metadata
+
+    AppScaleUpPolicy:
+     Type: AWS::AutoScaling::ScalingPolicy
+     Properties:
+     AdjustmentType: ChangeInCapacity
+     AutoScalingGroupName: !Ref WebServerAutoscaleGroup
+     Cooldown: '60'
+     ScalingAdjustment: 1
+
+    AppScaleDownPolicy:
+      Type: AWS::AutoScaling::ScalingPolicy
+      Properties:
+        AdjustmentType: ChangeInCapacity
+        AutoScalingGroupName: !Ref WebServerAutoscaleGroup
+        Cooldown: '300'
+        ScalingAdjustment: -1
+
+    CPUAlarmHigh:
+      Type: AWS::CloudWatch::Alarm
+      Properties:
+        AlarmDescription: Scale-up if CPU > 80% for 5 minutes
+        MetricName: CPUUtilization
+        Namespace: AWS/EC2
+        Statistic: Average
+        Period: 300
+        EvaluationPeriods: 2
+        Threshold: 80
+        AlarmActions: [!Ref AppScaleUpPolicy]
+        Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref WebServerAutoscaleGroup
+        ComparisonOperator: GreaterThanThreshold
+
+    CPUAlarmLow:
+      Type: AWS::CloudWatch::Alarm
+      Properties:
+        AlarmDescription: Scale-down if CPU < 60% for 5 minutes
+        MetricName: CPUUtilization
+        Namespace: AWS/EC2
+        Statistic: Average
+        Period: 300
+        EvaluationPeriods: 2
+        Threshold: 80
+        AlarmActions: [!Ref AppScaleDownPolicy]
+        Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref WebServerAutoscaleGroup
+        ComparisonOperator: LessThanThreshold
+
+  Outputs:
+
+    FInalOutputofProject:
+    Description: Web App ALB DNS Name 
+    Value:
+      Fn::Join:
+        - ''
+        - - "http://"
+          - Fn::GetAtt: LoadBalancer.DNSName

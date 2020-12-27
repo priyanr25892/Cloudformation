@@ -1,0 +1,54 @@
+Parameters:
+  RoleName:
+    Description: IAM Role name
+    Type: String
+    Default: svcCloudFormation
+
+  PolicyName:
+    Description: IAM Policy name
+    Type: String
+    Default: svcCloudFormation
+
+
+
+Resources:
+  CfnServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Ref RoleName
+      Path: /service/
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+        - Action: sts:AssumeRole
+          Effect: Allow
+          Principal:
+            Service: cloudformation.amazonaws.com
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AdministratorAccess
+
+  CfnUserPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: !Ref PolicyName
+      Description: User policy for creating CFN stacks with the use of svcCloudFormation role.
+      Path: /
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+        - Action:
+          - iam:PassRole
+          Effect: Allow
+          Resource:
+          - !GetAtt CfnServiceRole.Arn
+        - Action:
+          - cloudformation:*
+          Effect: Allow
+          Resource: '*'
+
+  Outputs:
+  CfnServiceRoleArn:
+    Value: !GetAtt CfnServiceRole.Arn
+
+  CfnUserPolicyArn:
+    Value: !Ref CfnUserPolicy

@@ -14,40 +14,40 @@ a cloudformation stack.
 Relationship principles for the component.
 
 
-    Webapplication(EC2):
-    Role description: Allows EC2 instances to call AWS services on your behalf.
-    Trusted Entity: AWS service: ec2.amazonaws.com
-    Policy:
-    AmazonElastiCacheFullAccess
-    AmazonRDSDataFullAccess
+                    Webapplication(EC2):
+                    Role description: Allows EC2 instances to call AWS services on your behalf.
+                    Trusted Entity: AWS service: ec2.amazonaws.com
+                    Policy:
+                    AmazonElastiCacheFullAccess
+                    AmazonRDSDataFullAccess
 
-    AutoScalingGroup:
-    Role description: Allows EC2 Auto Scaling to use or manage AWS services and resources on your behalf. 
-    Trusted Entity:
-    AWS service: autoscaling.amazonaws.com
-    Policy:
-    AutoScalingServiceRolePolicy
+                    AutoScalingGroup:
+                    Role description: Allows EC2 Auto Scaling to use or manage AWS services and resources on your behalf. 
+                    Trusted Entity:
+                    AWS service: autoscaling.amazonaws.com
+                    Policy:
+                    AutoScalingServiceRolePolicy
 
-    AWSServiceRoleForElasticLoadBalancing(Load Balancer):
-    Role description: Allows ELB to call AWS services on your behalf.
-    Trusted Entity:
-    AWS service: elasticloadbalancing.amazonaws.com
-    Policy:
-    AWSElasticLoadBalancingServiceRolePolicy 
-    
-    AWSServiceRoleforRDS:
-    Role description: Allows RDS to perform operationsusing AWS resources on your behalf.
-    Trusted Entity:
-    AWS service: rds.amazonaws.com
-    Policy:
-    AmazonRDSServiceRolePolicy
+                    AWSServiceRoleForElasticLoadBalancing(Load Balancer):
+                    Role description: Allows ELB to call AWS services on your behalf.
+                    Trusted Entity:
+                    AWS service: elasticloadbalancing.amazonaws.com
+                    Policy:
+                    AWSElasticLoadBalancingServiceRolePolicy 
+                    
+                    AWSServiceRoleforRDS:
+                    Role description: Allows RDS to perform operationsusing AWS resources on your behalf.
+                    Trusted Entity:
+                    AWS service: rds.amazonaws.com
+                    Policy:
+                    AmazonRDSServiceRolePolicy
 
-    AWSServiceRoleForElastiCache(Redis)
-    Role description: Allows ElastiCache to manage AWS resources for your cache on your behalf.
-    Trusted Entity:
-    AWS service: elasticache.amazonaws.com
-    Policy:
-    ElastiCacheServiceRolePolicy
+                    AWSServiceRoleForElastiCache(Redis)
+                    Role description: Allows ElastiCache to manage AWS resources for your cache on your behalf.
+                    Trusted Entity:
+                    AWS service: elasticache.amazonaws.com
+                    Policy:
+                    ElastiCacheServiceRolePolicy
 
 
 
