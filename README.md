@@ -91,3 +91,6 @@ twice per day using serverless function (Lambda) in Python 3.
     and value is rate(12 hours)--> means twice a day.
     And click on Enable trigger.
 
+    Go to Cloudwatch Events-->Rules. Edit the created rule and provide the target as lambda function .
+    Enter the name of the function and configure input as Constant with key test and value as true.
+
