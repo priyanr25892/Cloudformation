@@ -54,7 +54,7 @@ Description: An inventory of all EC2 instances running in a particular AWS accou
 twice per day using serverless function (Lambda) in Python 3.
 
 1. lambda_function.py file inside the folder pythonlambda contains the lambda function that is triggered on an event in cloudwatch which is scheduled twice per day. And packages related to are inside common folder.
-
+      ![alt text](https://github.com/priyanr25892/Cloudformation/blob/main/pythonlambda/package_layout.png?raw=true)
 2. lambdaCFT.yaml inside the folder pythonlambda contains Infrastructure-as-pseudo-Code for the solution.
 
 3. IAM Permission required for the lambda function are the following.
