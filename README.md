@@ -49,6 +49,45 @@ Relationship principles for the component.
                     Policy:
                     ElastiCacheServiceRolePolicy
 
+#PythonLambda
+Description: An inventory of all EC2 instances running in a particular AWS account needs to be taken
+twice per day using serverless function (Lambda) in Python 3.
 
+1. .py file inside the folder pythonlambda contains the lambda function that is triggered on an event in cloudwatch which is scheduled twice per day.
+2. lambdaCFT.yaml inside the folder pythonlambda contains Infrastructure-as-pseudo-Code for the solution.
+3. IAM Permission required for the lambda function are the following.
 
+                Cloudwatch logs:
+                Access: write
+                Permissions:
+                logs:CreateLogStream    
+                logs:PutLogEvents
+                logs:CreateLogGroup
+
+                EC2:
+                Access: List
+                Permissions:
+                ec2:DescribeInstances
+
+                S3:
+                Access: Read,Write
+                Permissions:
+                s3:PutObject
+                s3:GetObject
+
+                SNS:
+                Access: Write(sns-topic created in lambda function)
+                Permissions:
+                Publish
+
+4. Trigger for the lambda fucntion and its configuration:
+    CLoudwatch events is the trigger.
+    It is done from the configuration setting of lambda function.
+    From the designer we need to click on Add trigger
+    configure the trigger which is Event Bridge(Cloud Watch Events)
+
+    Create a new rule,provide name and description for the rule
+    Rule type should be Schedule Expression
+    and value is rate(12 hours)--> means twice a day.
+    And click on Enable trigger.
 
