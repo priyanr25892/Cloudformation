@@ -159,13 +159,13 @@
       VPC:
         CIDR: "10.0.0.0/22"
       Public0:
-        CIDR: "10.0.0.0/22"
+        CIDR: "10.0.0.0/24"
       Public1:
-        CIDR: "10.0.1.0/22"
+        CIDR: "10.0.1.0/24"
       Private0:
-        CIDR: "10.0.2.0/22"
+        CIDR: "10.0.2.0/24"
       Private1:
-        CIDR: "10.0.3.0/22"
+        CIDR: "10.0.3.0/24"
 
     # This mapping accounts for the scenario when certain AZs
     # are not available to use (this differs on a per account
